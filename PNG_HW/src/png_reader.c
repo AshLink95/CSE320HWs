@@ -2,13 +2,28 @@
 #include "png_crc.h"
 #include "util.h"
 #include "global.h"
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* Opens a PNG file and validates signature */
 FILE *png_open(const char *path)
 {
-    return NULL;
+    if (path == NULL) return NULL;
+    FILE* fptr = fopen(path, "r");
+    if (fptr == NULL) return NULL;
+    uint8_t ideal_sig[8] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    uint8_t real_sig[8];
+    if (fread(real_sig, 1, 8, fptr) != 8) {
+        fclose(fptr);
+        return NULL;
+    }
+    if (memcmp(ideal_sig, real_sig, 8) != 0) {
+        fclose(fptr);
+        return NULL;
+    }
+    return fptr;
 }
 
 /* Reads the next chunk from the file */
@@ -20,7 +35,10 @@ int png_read_chunk(FILE *fp, png_chunk_t *out)
 /* Frees memory allocated inside png_chunk_t */
 void png_free_chunk(png_chunk_t *chunk)
 {
-	
+    if (chunk != NULL) {
+        free(chunk->data);
+        chunk->data = NULL;
+    }
 }
 
 int png_extract_ihdr(FILE *fp, png_ihdr_t *out)
