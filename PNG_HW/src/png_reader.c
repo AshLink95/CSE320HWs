@@ -29,6 +29,34 @@ FILE *png_open(const char *path)
 /* Reads the next chunk from the file */
 int png_read_chunk(FILE *fp, png_chunk_t *out)
 {
+    if (fp == NULL || out == NULL) return -1;
+    uint8_t* buf = malloc(4);
+    if (buf == NULL) return -1;
+    read_exact(fp, buf, 4);
+    uint32_t length = read_u32_be(buf);
+
+    uint32_t buflen = 4 + length + 4;
+    uint8_t* tmp = realloc(buf, buflen);
+    if (tmp == NULL) {free(buf); return -1;}
+    buf = tmp;
+    uint8_t* crc_buf_check = malloc(4+length);
+    if (crc_buf_check == NULL) {free(buf); return -1;}
+    read_exact(fp, buf, buflen);
+    memcpy(crc_buf_check, buf, 4+length);
+    out->length = length;
+    memcpy(out->type, buf, 4);
+    out->type[4] = '\0';
+    if (length == 0) {
+        out->data=NULL;
+    } else {
+        out->data = malloc(length);
+        if (out->data == NULL) {free(buf); free(crc_buf_check); return -1;}
+        memcpy(out->data, &buf[4], length);
+    }
+    out->crc = read_u32_be(buf + 4 + length);
+    uint32_t calcd = png_crc(crc_buf_check, 4+length);
+    if (calcd != out->crc) {free(buf); free(crc_buf_check); return -1;}
+    free(buf); free(crc_buf_check);
     return 0;
 }
 
