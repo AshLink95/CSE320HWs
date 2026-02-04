@@ -71,6 +71,12 @@ void png_free_chunk(png_chunk_t *chunk)
 
 int png_extract_ihdr(FILE *fp, png_ihdr_t *out)
 {
+    png_chunk_t tmp;
+    int status1 = png_read_chunk(fp, &tmp);
+    if (status1 < 0) return -1;
+    int status2 = png_parse_ihdr(&tmp, out);
+    if (status2 < 0) {png_free_chunk(&tmp); return -1;}
+    png_free_chunk(&tmp);
     return 0;
 }
 
