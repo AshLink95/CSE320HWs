@@ -72,11 +72,11 @@ void png_free_chunk(png_chunk_t *chunk)
 int png_extract_ihdr(FILE *fp, png_ihdr_t *out)
 {
     png_chunk_t tmp;
-    int status1 = png_read_chunk(fp, &tmp);
-    if (status1 < 0) return -1;
+    int status = png_read_chunk(fp, &tmp);
+    if (status < 0) return -1;
     if (strcmp(tmp.type, "IHDR") != 0) {png_free_chunk(&tmp); return -1;}
-    int status2 = png_parse_ihdr(&tmp, out);
-    if (status2 < 0) {png_free_chunk(&tmp); return -1;}
+    status = png_parse_ihdr(&tmp, out);
+    if (status < 0) {png_free_chunk(&tmp); return -1;}
     png_free_chunk(&tmp);
     return 0;
 }
@@ -84,21 +84,46 @@ int png_extract_ihdr(FILE *fp, png_ihdr_t *out)
 int png_extract_plte(FILE *fp, png_color_t **out_colors, size_t *out_count)
 {
     png_chunk_t tmp;
-    int status1 = png_read_chunk(fp, &tmp);
-    if (status1 < 0) return -1;
+    int status = png_read_chunk(fp, &tmp);
+    if (status < 0) return -1;
     while (strcmp(tmp.type, "PLTE") != 0 && strcmp(tmp.type, "IDAT") != 0 && strcmp(tmp.type, "IEND") != 0) {
-        png_free_chunk(&tmp); status1 = png_read_chunk(fp, &tmp);
-        if (status1 < 0) return -1;
+        png_free_chunk(&tmp); status = png_read_chunk(fp, &tmp);
+        if (status < 0) return -1;
     }
     if (strcmp(tmp.type, "PLTE") != 0) {png_free_chunk(&tmp); return -1;}
-    if (status1 < 0) {png_free_chunk(&tmp); return -1;}
-    int status2 = png_parse_plte(&tmp, out_colors, out_count);
-    if (status2 < 0) {png_free_chunk(&tmp); return -1;}
+    if (status < 0) {png_free_chunk(&tmp); return -1;}
+    status = png_parse_plte(&tmp, out_colors, out_count);
+    if (status < 0) {png_free_chunk(&tmp); return -1;}
     png_free_chunk(&tmp);
     return 0;
 }
 
 int png_summary(const char *filename, png_chunk_t **out_summary)
 {
+    if (filename == NULL || out_summary == NULL) return -1;
+    FILE* fp = png_open(filename);
+    if (fp == NULL) return -1;
+    png_chunk_t chunk;
+    uint32_t len = 0;
+    char type[5] = "";
+    while (strcmp(type, "IEND") != 0) {
+        int status = png_read_chunk(fp, &chunk);
+        if (status < 0) {fclose(fp); return -1;}
+        memcpy(type, chunk.type, 5);
+        png_free_chunk(&chunk);
+        len++;
+    }
+    *out_summary = malloc(len * sizeof(png_chunk_t));
+    fclose(fp);
+    if (*out_summary == NULL) return -1;
+    fp = png_open(filename);
+    if (fp == NULL) return -1;
+    for (uint32_t i = 0; i<len; i++) {
+        int status = png_read_chunk(fp, &chunk);
+        if (status < 0) {fclose(fp); free(*out_summary); return -1;}
+        png_free_chunk(&chunk);
+        (*out_summary)[i] = chunk;
+    }
+    fclose(fp);
     return 0;
 }
