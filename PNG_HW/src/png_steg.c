@@ -228,11 +228,89 @@ int png_extract_lsb(const char *input_path, char *out, size_t max_len)
 
     FILE *fp = png_open(input_path);
     if (fp == NULL) return -1;
-
     png_ihdr_t ihdr;
     if (png_extract_ihdr(fp, &ihdr) < 0) {fclose(fp); return -1;}
     if (ihdr.bit_depth != 8) {fclose(fp); return -1;}
 
-    fclose(fp);
-    return 0;
+    png_color_t* colors = NULL;
+    size_t og_count = 0;
+    size_t new_count = 0;
+    int pairs[256];
+    for (int i = 0; i < 256; i++) pairs[i] = -1;
+    if (ihdr.color_type == 3) {
+        if (png_extract_plte(fp, &colors, &og_count) < 0) {fclose(fp); return -1;}
+        for (size_t i = 0; i < og_count; i++) {
+            if (pairs[i] != -1) continue;
+            for (size_t j = i + 1; j < og_count; j++) {
+                if (pairs[j] != -1) continue;
+                if (colors[i].r == colors[j].r &&
+                    colors[i].g == colors[j].g &&
+                    colors[i].b == colors[j].b) {
+                    pairs[i] = j;
+                    pairs[j] = i;
+                    break;
+                }
+            }
+        }
+        new_count = og_count;
+        for (size_t i = 0; i < og_count; i++) {
+            if (pairs[i] == -1) {
+                if (new_count >= 256) {free(colors); fclose(fp); return -1;}
+                png_color_t* tmp = realloc(colors, (new_count + 1) * sizeof(png_color_t));
+                if (tmp == NULL) {free(colors); fclose(fp); return -1;}
+                colors = tmp;
+                colors[new_count] = colors[i];
+                pairs[i] = new_count;
+                pairs[new_count] = i;
+                new_count++;
+            }
+        }
+    }
+    size_t compbuflen = 0;
+    uint8_t* compbuf = NULL;
+    if (png_extract_idat(fp, &compbuf, &compbuflen) < 0) {free(colors); fclose(fp); return -1;}
+    uint8_t* buf = NULL;
+    size_t buflen = 0;
+    if (util_inflate_data(compbuf, compbuflen, &buf, &buflen) < 0)
+    {free(compbuf); free(colors); fclose(fp); return -1;}
+    free(compbuf); compbuf = NULL;
+
+    int bpp = (ihdr.color_type == 0) ? 1 : (ihdr.color_type == 2) ? 3 : (ihdr.color_type == 3) ? 1 :
+              (ihdr.color_type == 4) ? 2 : (ihdr.color_type == 6) ? 4 : 0;
+    if (bpp == 0) {free(buf); free(colors); fclose(fp); return -1;}
+
+    size_t scanline_width = 1 + ihdr.width * bpp;
+    size_t max_pixels = ihdr.width * ihdr.height;
+    size_t out_idx = 0;
+    uint8_t curr_byte = 0;
+    int bit_count = 0;
+    for (size_t pixel = 0; pixel < max_pixels && out_idx < max_len - 1; pixel++) {
+        size_t row = pixel / ihdr.width;
+        size_t col = pixel % ihdr.width;
+        size_t byte_pos = row * scanline_width + 1 + col * bpp;
+        int bit_val;
+        if (ihdr.color_type == 3) {
+            uint8_t idx = buf[byte_pos];
+            int pair = pairs[idx];
+            bit_val = (idx > pair) ? 1 : 0;
+        } else {
+            bit_val = buf[byte_pos] & 1;
+        }
+        curr_byte |= (bit_val << bit_count);
+        bit_count++;
+        if (bit_count == 8) {
+            if (curr_byte == 0) {
+                out[out_idx] = '\0';
+                free(buf); free(colors); fclose(fp);
+                return out_idx;
+            }
+            out[out_idx++] = curr_byte;
+            curr_byte = 0;
+            bit_count = 0;
+        }
+    }
+
+    out[out_idx] = '\0';
+    free(buf); free(colors); fclose(fp);
+    return out_idx;
 }
