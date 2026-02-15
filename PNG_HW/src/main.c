@@ -60,7 +60,9 @@ int main(int argc, char **argv)
                 png_chunk_t* c_summary = NULL;
                 if (png_summary(fname, &c_summary) < 0) {PRINT_ERROR_READ_CHUNKS(); return EXIT_FAILURE;}
                 PRINT_CHUNK_SUMMARY_HEADER(fname);
-                for (int k = 0; strcmp(c_summary[k].type, "IEND") !=0 ; k++) PRINT_CHUNK_INFO(k, c_summary[k]);
+                int k = 0;
+                for (k = 0; strcmp(c_summary[k].type, "IEND") !=0 ; k++) PRINT_CHUNK_INFO(k, c_summary[k]);
+                PRINT_CHUNK_INFO(k, c_summary[k]);
                 s--;
             }
             if (arg[j] == 'p' && p) {
