@@ -28,14 +28,16 @@ int main(int argc, char **argv)
     char* fname = NULL;
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] != '-' && name == 0) {PRINT_ERROR_UNKNOWN_OPTION(argv[i]); return EXIT_FAILURE;}
-        if (argv[i][0] != '-' && name == 1) {
-            fname = malloc(strlen(argv[i] + 1));
-            strcpy(fname, argv[i]);
-            break;
+        else if (argv[i][0] != '-' && name == 1) {
+            fname = malloc(strlen(argv[i]) + 1);
+            strcpy(fname, argv[i]); break;
         }
-        char arg[strlen(argv[i]) - 1];
-        strncpy(arg, argv[i] + 1, strlen(argv[i]) - 1);
-        for (int j = 0; j < strlen(arg); j++) {
+        else if (argv[i][0] != '-') break;
+        size_t arg_len = strlen(argv[i]) - 1;
+        char arg[arg_len + 1];
+        strncpy(arg, argv[i] + 1, arg_len);
+        arg[arg_len] = '\0';
+        for (int j = 0; j < arg_len; j++) {
             if (arg[j] == 'h') {PRINT_USAGE(argv[0]); return EXIT_SUCCESS;}
             if (arg[j] == 'f' && name == 0) name = 1;
         }
@@ -46,15 +48,52 @@ int main(int argc, char **argv)
     fclose(fp); fp = NULL;
 
     uint8_t s = 1; uint8_t p = 1; uint8_t ii = 1; uint8_t d = 1;
+    uint8_t e = 0; uint8_t eo = 0;
+    char* emsg = NULL; char* eoname = NULL;
+    uint8_t m = 0; uint8_t mo = 0; uint8_t mw = 0; uint8_t mg = 0;
+    char* mname = NULL; char* moname = NULL; long mwval = 0; long mgval = 0;
     for (int i = 1; i < argc; i++) {
-        if (argv[i][0] != '-' && strcmp(argv[i], fname) != 0)
+        if (argv[i][0] != '-' && strcmp(argv[i], fname) != 0 && !e && !eo && !m && !mo && !mw && !mg)
         {PRINT_ERROR_UNKNOWN_OPTION(argv[i]); return EXIT_FAILURE;}
         else if (argv[i][0] != '-' && strcmp(argv[i], fname) == 0) continue;
-        char arg[strlen(argv[i]) - 1];
-        strncpy(arg, argv[i] + 1, strlen(argv[i]) - 1);
-        for (int j = 0; j < strlen(arg); j++) {
-            if (arg[j] == 'e') {/*encode (needs extra work)*/; return EXIT_SUCCESS;}
-            if (arg[j] == 'm') {/*overlay (needs extra work)*/; return EXIT_SUCCESS;}
+        else if (argv[i][0] != '-' && e == 1) {
+            emsg = malloc(strlen(argv[i]) + 1);
+            strcpy(emsg, argv[i]); e++; continue;
+        }
+        else if (argv[i][0] != '-' && eo == 1) {
+            eoname = malloc(strlen(argv[i]) + 1);
+            strcpy(eoname, argv[i]); eo++; continue;
+        }
+        else if (argv[i][0] != '-' && m == 1) {
+            mname = malloc(strlen(argv[i]) + 1);
+            strcpy(mname, argv[i]); m++; continue;
+        }
+        else if (argv[i][0] != '-' && mo == 1) {
+            moname = malloc(strlen(argv[i]) + 1);
+            strcpy(moname, argv[i]); mo++; continue;
+        }
+        else if (argv[i][0] != '-' && mw == 1) {
+            char* endptr = NULL; mw++;
+            mwval = strtol(argv[i], &endptr, 10); continue;
+        }
+        else if (argv[i][0] != '-' && mg == 1) {
+            char* endptr = NULL; mg++;
+            mgval = strtol(argv[i], &endptr, 10); continue;
+        }
+        else if (argv[i][0] != '-') break;
+        size_t arg_len = strlen(argv[i]) - 1;
+        char arg[arg_len + 1];
+        strncpy(arg, argv[i] + 1, arg_len);
+        arg[arg_len] = '\0';
+        for (int j = 0; j < arg_len; j++) {                   
+            if (arg[j] == 'e' && !e) e++;
+
+            if (arg[j] == 'o' && e >= 1 && !eo) eo++;
+            else if (arg[j] == 'o' && m >= 1 && !mo) mo++;
+
+            if (arg[j] == 'm' && !m) m++;
+            if (arg[j] == 'w' && m >= 1) mw++;
+            if (arg[j] == 'g' && m >= 1) mg++;
 
             if (arg[j] == 's' && s) {
                 png_chunk_t* c_summary = NULL;
@@ -63,6 +102,7 @@ int main(int argc, char **argv)
                 int k = 0;
                 for (k = 0; strcmp(c_summary[k].type, "IEND") !=0 ; k++) PRINT_CHUNK_INFO(k, c_summary[k]);
                 PRINT_CHUNK_INFO(k, c_summary[k]);
+                free(c_summary); c_summary = NULL;
                 s--;
             }
             if (arg[j] == 'p' && p) {
@@ -75,15 +115,18 @@ int main(int argc, char **argv)
                 PRINT_PALETTE_HEADER(fname);
                 PRINT_PALETTE_COUNT(p_count);
                 for (size_t k=0;k<p_count;k++) PRINT_PALETTE_COLOR(k, p_summary[k].r, p_summary[k].g, p_summary[k].b);
+                fclose(fp); fp = NULL;
+                free(p_summary); p_summary = NULL;
                 p--;
             }
-            if (arg[j] == 'i' && i) {
+            if (arg[j] == 'i' && ii) {
                 png_ihdr_t i_summary;
                 FILE* fp = png_open(fname);
                 if (fp == NULL) {PRINT_ERROR_OPEN_FILE(fname); return EXIT_FAILURE;}
                 if (png_extract_ihdr(fp, &i_summary) < 0)
                 {fclose(fp); PRINT_ERROR_READ_IHDR(); return EXIT_FAILURE;}
                 PRINT_IHDR(fname, i_summary);
+                fclose(fp); fp = NULL;
                 ii--;
             }
             if (arg[j] == 'd' && d) {
@@ -99,10 +142,47 @@ int main(int argc, char **argv)
                 if (png_extract_lsb(fname, msg, max_len) < 0)
                 {free(msg); PRINT_ERROR_EXTRACT_FAILED(); return EXIT_FAILURE;}
                 PRINT_HIDDEN_MESSAGE(msg);
+                free(msg); msg = NULL;
                 d--;
             }
         }
     }
 
+    if (e==2 && eo==2) {
+        if (png_encode_lsb(fname, eoname, emsg) < 0)
+        {PRINT_ERROR_ENCODE_FAILED(); return EXIT_FAILURE;}
+        else PRINT_ENCODE_SUCCESS(eoname);
+    }
+    else if (e) PRINT_ERROR_ENCODE_REQUIRES();
+    free(emsg); emsg = NULL; free(eoname); eoname = NULL;
+
+    if (m==2 && mo==2) {
+        if (mw == 1) PRINT_ERROR_WIDTH_REQUIRES();
+        if (mg == 1) PRINT_ERROR_HEIGHT_REQUIRES();
+        FILE* fp = png_open(fname);
+        if (fp == NULL) {PRINT_ERROR_OPEN_FILE(fname); return EXIT_FAILURE;}
+        FILE* mp = png_open(mname);
+        if (mp == NULL) {fclose(fp); PRINT_ERROR_OPEN_FILE(mname); return EXIT_FAILURE;}
+        png_ihdr_t fihdr; png_ihdr_t mihdr;
+        if (png_extract_ihdr(fp, &fihdr) < 0)
+        {fclose(fp); fclose(mp); PRINT_ERROR_EXTRACT_FAILED(); return EXIT_FAILURE;}
+        if (png_extract_ihdr(mp, &mihdr) < 0)
+        {fclose(mp); fclose(fp); PRINT_ERROR_EXTRACT_FAILED(); return EXIT_FAILURE;}
+        fclose(fp); fp = NULL; fclose(mp); mp = NULL;
+        size_t flen = fihdr.width * fihdr.height;
+        size_t mlen = mihdr.width * mihdr.height;
+        if (flen > mlen) {
+            if (png_overlay_paste(fname, mname, moname, mwval, mgval) < 0)
+            {PRINT_ERROR_OVERLAY_FAILED(); return EXIT_FAILURE;}
+        } else {
+            if (png_overlay_paste(mname, fname, moname, mwval, mgval) < 0)
+            {PRINT_ERROR_OVERLAY_FAILED(); return EXIT_FAILURE;}
+        }
+        PRINT_OVERLAY_SUCCESS(moname);
+    }
+    else if (m) PRINT_ERROR_OVERLAY_REQUIRES();
+    free(mname); mname = NULL; free(moname); moname = NULL;
+
+    free(fname);
     return EXIT_SUCCESS;
 }
