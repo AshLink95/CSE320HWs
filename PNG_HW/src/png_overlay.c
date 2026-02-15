@@ -36,10 +36,10 @@ int overlay_write_chunk(FILE *fp, const char *type, const uint8_t *data, uint32_
 }
 
 // helper to write output file
-int overlay_write(const char *input_path, const char *output_path, png_ihdr_t *ihdr, png_color_t *colors, size_t new_count, uint8_t *new_compbuf, size_t new_complen)
+int overlay_write(const char *large_path, const char *small_path, const char *output_path, png_ihdr_t *ihdr, png_color_t *colors, size_t new_count, uint8_t *new_compbuf, size_t new_complen)
 {
-    if (input_path == NULL || output_path == NULL || new_compbuf == NULL) return -1;
-    FILE *fp = png_open(input_path);
+    if (large_path == NULL || small_path == NULL || output_path == NULL || new_compbuf == NULL) return -1;
+    FILE *fp = png_open(large_path);
     if (fp == NULL) return -1;
     FILE *out = fopen(output_path, "wb");
     if (out == NULL) {fclose(fp); return -1;}
@@ -61,6 +61,22 @@ int overlay_write(const char *input_path, const char *output_path, png_ihdr_t *i
             free(plte_data);
         } else if (strcmp(chunk.type, "IDAT") == 0) {
             if (!wrote_idat) {
+                // write ancillary chunks from small image before IDAT
+                FILE *fp_small = png_open(small_path);
+                if (fp_small != NULL) {
+                    png_chunk_t schunk;
+                    while (png_read_chunk(fp_small, &schunk) == 0) {
+                        if (strcmp(schunk.type, "IDAT") == 0 || strcmp(schunk.type, "IEND") == 0) {
+                            png_free_chunk(&schunk);
+                            break;
+                        }
+                        if (strcmp(schunk.type, "IHDR") != 0 && strcmp(schunk.type, "PLTE") != 0) {
+                            overlay_write_chunk(out, schunk.type, schunk.data, schunk.length);
+                        }
+                        png_free_chunk(&schunk);
+                    }
+                    fclose(fp_small);
+                }
                 overlay_write_chunk(out, "IDAT", new_compbuf, (uint32_t)new_complen);
                 wrote_idat = 1;
             }
@@ -297,7 +313,7 @@ int png_overlay_paste(const char *large_path, const char *small_path,
     }
     free(large_buf);
 
-    if (overlay_write(large_path, output_path, &ihdr_large, merged_colors, merged_count, new_comp, new_comp_len) < 0) {
+    if (overlay_write(large_path, small_path, output_path, &ihdr_large, merged_colors, merged_count, new_comp, new_comp_len) < 0) {
         free(new_comp); free(merged_colors); return -1;
     }
     free(new_comp);
