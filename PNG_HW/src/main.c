@@ -39,10 +39,12 @@ int main(int argc, char **argv)
         arg[arg_len] = '\0';
         for (int j = 0; j < arg_len; j++) {
             if (arg[j] == 'h') {PRINT_USAGE(argv[0]); return EXIT_SUCCESS;}
-            if (arg[j] == 'f' && name == 0) name = 1;
+            else if (arg[j] == 'f' && name == 0) name = 1;
+            // else if (arg[j])
         }
     }
-    if (fname == NULL) {PRINT_ERROR_OPEN_FILE(fname); return EXIT_FAILURE;}
+    if (name == 0) {PRINT_ERROR_MISSING_F_FLAG(); return EXIT_FAILURE;}
+    else if (fname == NULL) {PRINT_ERROR_F_REQUIRES_FILENAME(); return EXIT_FAILURE;}
     FILE* fp = png_open(fname);
     if (fp == NULL) {PRINT_ERROR_OPEN_FILE(fname); return EXIT_FAILURE;}
     fclose(fp); fp = NULL;
@@ -88,14 +90,14 @@ int main(int argc, char **argv)
         for (int j = 0; j < arg_len; j++) {                   
             if (arg[j] == 'e' && !e) e++;
 
-            if (arg[j] == 'o' && e >= 1 && !eo) eo++;
+            else if (arg[j] == 'o' && e >= 1 && !eo) eo++;
             else if (arg[j] == 'o' && m >= 1 && !mo) mo++;
 
-            if (arg[j] == 'm' && !m) m++;
-            if (arg[j] == 'w' && m >= 1) mw++;
-            if (arg[j] == 'g' && m >= 1) mg++;
+            else if (arg[j] == 'm' && !m) m++;
+            else if (arg[j] == 'w' && m >= 1) mw++;
+            else if (arg[j] == 'g' && m >= 1) mg++;
 
-            if (arg[j] == 's' && s) {
+            else if (arg[j] == 's' && s) {
                 png_chunk_t* c_summary = NULL;
                 if (png_summary(fname, &c_summary) < 0) {PRINT_ERROR_READ_CHUNKS(); return EXIT_FAILURE;}
                 PRINT_CHUNK_SUMMARY_HEADER(fname);
@@ -105,7 +107,7 @@ int main(int argc, char **argv)
                 free(c_summary); c_summary = NULL;
                 s--;
             }
-            if (arg[j] == 'p' && p) {
+            else if (arg[j] == 'p' && p) {
                 png_color_t* p_summary = NULL;
                 size_t p_count = 0;
                 FILE* fp = png_open(fname);
@@ -119,7 +121,7 @@ int main(int argc, char **argv)
                 free(p_summary); p_summary = NULL;
                 p--;
             }
-            if (arg[j] == 'i' && ii) {
+            else if (arg[j] == 'i' && ii) {
                 png_ihdr_t i_summary;
                 FILE* fp = png_open(fname);
                 if (fp == NULL) {PRINT_ERROR_OPEN_FILE(fname); return EXIT_FAILURE;}
@@ -129,7 +131,7 @@ int main(int argc, char **argv)
                 fclose(fp); fp = NULL;
                 ii--;
             }
-            if (arg[j] == 'd' && d) {
+            else if (arg[j] == 'd' && d) {
                 FILE* fp = png_open(fname);
                 if (fp == NULL) {PRINT_ERROR_OPEN_FILE(fname); return EXIT_FAILURE;}
                 png_ihdr_t ihdr;
@@ -144,6 +146,12 @@ int main(int argc, char **argv)
                 PRINT_HIDDEN_MESSAGE(msg);
                 free(msg); msg = NULL;
                 d--;
+            }
+            else if (arg[j]!='f' && arg[j]!='h'){
+                char matta[3];
+                matta[0] = '-'; matta[1] = arg[j]; matta[2] = '\0';
+                PRINT_ERROR_UNKNOWN_OPTION(matta);
+                return EXIT_FAILURE;
             }
         }
     }
