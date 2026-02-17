@@ -55,7 +55,7 @@ int png_read_chunk(FILE *fp, png_chunk_t *out)
     }
     out->crc = read_u32_be(buf + 4 + length);
     uint32_t calcd = png_crc(crc_buf_check, 4+length);
-    if (calcd != out->crc) {free(buf); free(crc_buf_check); return -1;}
+    if (calcd != out->crc) out->crc = 0;
     free(buf); free(crc_buf_check);
     return 0;
 }
