@@ -116,7 +116,7 @@ int parse_member(FILE* file, gz_header_t* header) {
 	}
 
 
-	if (fseek(file, 0, SEEK_END) != 0) {
+	if (fseek(file, -8, SEEK_END) != 0) {
 		debug("could not skip to end of file");
 		return 1;
 	}
@@ -132,8 +132,8 @@ int parse_member(FILE* file, gz_header_t* header) {
  */
 char* inflate(char* bytes, size_t comp_len) {
 	// disregards dictionary
-	unsigned int *bit_header = NULL;
-	unsigned long bit_pointer;
+	unsigned int bit_header = 0;
+	unsigned long bit_pointer = 0;
 	unsigned char* out_block;
 	unsigned char* out_member = NULL;
 	size_t len_out_member = 0;
@@ -144,9 +144,9 @@ char* inflate(char* bytes, size_t comp_len) {
 	
 	for (;;)
 	{
-		bit_reader((unsigned char *)bytes + (bit_pointer / 8),3,&bit_pointer,bit_header,0);
+		bit_reader((unsigned char *)bytes + (bit_pointer / 8),3, &bit_pointer, &bit_header, 0);
 		// Check btypes and bfinal
-		unsigned int btype = (*bit_header >> 1) & BT_MASK;
+		unsigned int btype = (bit_header >> 1) & BT_MASK;
 
 		// Use macros for the btypes
 		if(btype == BT_DYNAMIC || btype == BT_STATIC)
@@ -193,7 +193,7 @@ char* inflate(char* bytes, size_t comp_len) {
 		free(out_block);
 		len_out_member += out_len;
 		// Check if BFINAL was set and stop reading this member's data if so
-		if(*bit_header & 0x01)
+		if(bit_header & 0x01)
 		{
 			break;
 		}
@@ -286,12 +286,12 @@ char* deflate(char* filename, char* bytes, size_t len, size_t* out_len) {
 		}
 
 		// Write 3-bit block header: BFINAL (1 bit) + BTYPE (2 bits), LSB-first
-		unsigned int header_val = (is_last ? 0 : 1) | ((unsigned int)btype << 1);
+		unsigned int header_val = (is_last ? 1 : 0) | ((unsigned int)btype << 1);
 		bit_writer(header_val, 3, &total_bit_pos, (unsigned char*)out_member, false);
 
 		// Merge Huffman-encoded data at current bit position
-		unsigned long bit_offset = total_bit_pos / 8;
-		unsigned long byte_pos = total_bit_pos % 8;
+		unsigned long byte_pos = total_bit_pos / 8;
+		unsigned long bit_offset = total_bit_pos % 8;
 		for (size_t i = 0; i < huff_len; i++) {
 			out_member[byte_pos + i]     |= (unsigned char)(huff_buf[i] << bit_offset);
 			if (bit_offset > 0)

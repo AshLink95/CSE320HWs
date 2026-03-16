@@ -432,7 +432,7 @@ static unsigned char* encode_dynamic_huffman_tokens(const lz_token_t* tokens, si
 
     // Find HLIT
     int max_lit_sym = 256;
-    for (int j = 257; j < NUM_SYMS_AND_LENGTHS; j++) {
+    for (int j = NUM_SYMS_AND_LENGTHS - 1; j >= 257; j--) {
         if (lit_lens[j] > 0) { max_lit_sym = j; break; }
     }
     unsigned int hlit = max_lit_sym - 256;
@@ -740,7 +740,6 @@ unsigned char* huffman_decode(const unsigned char* data, size_t enc_len, unsigne
 			if (len_table[len_idx].extra > 0) {
 				unsigned int extra_val = 0;
 				bit_reader(data + (*bits_read / 8), len_table[len_idx].extra, bits_read, &extra_val, false);
-				*bits_read = *bits_read + 1;
 				length += extra_val;
 			}
 
@@ -754,7 +753,6 @@ unsigned char* huffman_decode(const unsigned char* data, size_t enc_len, unsigne
 			if (dist_table[dist_sym].extra > 0) {
 				unsigned int extra_val = 0;
 				bit_reader(data + (*bits_read / 8), dist_table[dist_sym].extra, bits_read, &extra_val, false);
-				*bits_read = *bits_read + 1;
 				distance += extra_val;
 			}
 

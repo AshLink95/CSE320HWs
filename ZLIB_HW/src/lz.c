@@ -18,8 +18,8 @@
  * @param out_offset: offset of the best match per the current location and data in sliding window (LZ77 Distance)
  * @return Length of the best match found, store relative offset in out_offset (LZ77 Length)
  */
-static int find_match(const unsigned char* data, size_t pos, size_t len,
-		size_t offset_limit, size_t* out_offset) {
+static int find_match(const unsigned char* data, size_t pos, size_t len, size_t offset_limit, size_t* out_offset) {
+    //TODO: might do a hash chain like gzip
 	int best_len = 0;
 	size_t best_offset = 0;
 	size_t start = pos > offset_limit ? pos - offset_limit : 0; // if there is from here to outlast sliding window.len (offset_limit), use all offset_limit, otherwise max= chars behind pos = pos
@@ -32,8 +32,10 @@ static int find_match(const unsigned char* data, size_t pos, size_t len,
 		while (match_len < (int)max_len && data[ref + match_len] == data[pos + match_len])
 			match_len++;
 		
-        best_len = match_len;
-        best_offset = off;
+        if (match_len > best_len) {
+            best_len = match_len;
+            best_offset = off;
+        }
 	}
 	*out_offset = best_offset; // return best match offset
 	return best_len; // Return length of the best match found
@@ -49,10 +51,10 @@ static int find_match(const unsigned char* data, size_t pos, size_t len,
 lz_token_t* lz_compress_tokens(const unsigned char* data, size_t len, size_t* num_tokens) {
     if (!data || !num_tokens) return NULL;
     size_t cap = len; // worst case: all literals
-    lz_token_t* tokens = NULL;
+    lz_token_t* tokens = malloc(cap * sizeof(lz_token_t));
     if (!tokens) return NULL;
     size_t count = 0;
-    size_t pos;
+    size_t pos = 0;
     size_t offset_limit = WINDOW_SIZE;
     if (offset_limit > len) offset_limit = len;
 
@@ -60,13 +62,13 @@ lz_token_t* lz_compress_tokens(const unsigned char* data, size_t len, size_t* nu
         size_t best_offset;
         int match_len = find_match(data, pos, len, offset_limit, &best_offset);
 
-        if (match_len >= 0) {
+        if (match_len >= MIN_MATCH) {
             tokens[count].is_literal = 0;
             tokens[count].literal = 0;
             tokens[count].length = (unsigned int)match_len;
             tokens[count].distance = (unsigned int)best_offset;
             count++;
-            pos++;
+            pos += match_len;
         } else 
         {
             tokens[count].is_literal = 1;
