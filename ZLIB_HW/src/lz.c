@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "lz.h"
@@ -5,8 +6,15 @@
 
 #define WINDOW_SIZE 32768 // Allowed reference of previous strings (allowed to span previous blocks)
 #define MAX_MATCH   258 // Max range of matches 3.2.5 (max(3-258) => max(0-255))
-#define MIN_MATCH  3
+#define MIN_MATCH   3
 
+#define HASH_BITS   15
+#define HASH_SIZE  (1 << HASH_BITS)
+#define MAX_CHAIN   64
+
+#define HASH_SHIFT  5 //(HASH_BITS + MIN_MATCH - 1) / MIN_MATCH
+#define HASH_MASK  (HASH_SIZE - 1)
+#define UPDATE_HASH(h,c) (h = (((h) << HASH_SHIFT) ^ (c)) & HASH_MASK)
 
 /**
  * Find longest match of data[pos..] in data[pos - offset_limit .. pos - 1].
@@ -18,26 +26,43 @@
  * @param out_offset: offset of the best match per the current location and data in sliding window (LZ77 Distance)
  * @return Length of the best match found, store relative offset in out_offset (LZ77 Length)
  */
-static int find_match(const unsigned char* data, size_t pos, size_t len, size_t offset_limit, size_t* out_offset) {
-    //TODO: might do a hash chain like gzip
-	int best_len = 0;
-	size_t best_offset = 0;
-	size_t start = pos > offset_limit ? pos - offset_limit : 0; // if there is from here to outlast sliding window.len (offset_limit), use all offset_limit, otherwise max= chars behind pos = pos
-	size_t max_len = len - pos;
-	if (max_len > MAX_MATCH) max_len = MAX_MATCH;
-	for (size_t off = 1; off <= pos - start && off <= WINDOW_SIZE; off++) {
-		size_t ref = pos - off;
-		int match_len = 0;
-		// Continue extending the length for the string as long as it can 
-		while (match_len < (int)max_len && data[ref + match_len] == data[pos + match_len])
-			match_len++;
-		
-        if (match_len > best_len) {
-            best_len = match_len;
-            best_offset = off;
+static void insert_hash(const unsigned char* data, size_t pos, size_t len, uint32_t* head, uint32_t* prev) {
+    if (pos + MIN_MATCH > len) return;
+    uint32_t h = data[pos];
+    UPDATE_HASH(h, data[pos + 1]);
+    UPDATE_HASH(h, data[pos + 2]);
+    prev[pos % WINDOW_SIZE] = head[h];
+    head[h] = (uint32_t)pos;
+}
+
+static int find_match(const unsigned char* data, size_t pos, size_t len, size_t offset_limit, size_t* out_offset, uint32_t* head, uint32_t* prev) {
+    if (pos + MIN_MATCH > len) return 0;
+    uint32_t h = data[pos];
+    UPDATE_HASH(h, data[pos + 1]);
+    UPDATE_HASH(h, data[pos + 2]);
+    uint32_t candidate = head[h];
+
+    int best_len = 0;
+    int steps = 0;
+    while (candidate != UINT32_MAX && steps < MAX_CHAIN) {
+        if (pos - candidate <= offset_limit) {
+            int match_len = 0;
+            while (match_len < MAX_MATCH
+                   && pos + match_len < len
+                   && data[candidate + match_len] == data[pos + match_len]) {
+                match_len++;
+            }
+            if (match_len > best_len) {
+                best_len = match_len;
+                *out_offset = pos - candidate;
+            }
         }
-	}
-	*out_offset = best_offset; // return best match offset
+        candidate = prev[candidate % WINDOW_SIZE];
+        steps++;
+    }
+
+    prev[pos % WINDOW_SIZE] = head[h];
+    head[h] = (uint32_t)pos;
 	return best_len; // Return length of the best match found
 }
 
@@ -58,9 +83,14 @@ lz_token_t* lz_compress_tokens(const unsigned char* data, size_t len, size_t* nu
     size_t offset_limit = WINDOW_SIZE;
     if (offset_limit > len) offset_limit = len;
 
+    uint32_t head[HASH_SIZE];
+    uint32_t prev[WINDOW_SIZE];
+    memset(head, 0xFF, sizeof(head));
+    memset(prev, 0xFF, sizeof(prev));
+
     while (pos < len) {
         size_t best_offset;
-        int match_len = find_match(data, pos, len, offset_limit, &best_offset);
+        int match_len = find_match(data, pos, len, offset_limit, &best_offset, head, prev);
 
         if (match_len >= MIN_MATCH) {
             tokens[count].is_literal = 0;
@@ -68,6 +98,8 @@ lz_token_t* lz_compress_tokens(const unsigned char* data, size_t len, size_t* nu
             tokens[count].length = (unsigned int)match_len;
             tokens[count].distance = (unsigned int)best_offset;
             count++;
+            for (size_t i = pos + 1; i < pos + match_len; i++)
+                insert_hash(data, i, len, head, prev);
             pos += match_len;
         } else 
         {
