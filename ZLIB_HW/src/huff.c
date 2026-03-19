@@ -209,7 +209,7 @@ static huff_node_t* build_huffman_tree_from_freq(unsigned int *frequencies, int 
             node->freq = frequencies[i];
             node->left = NULL;
             node->right = NULL;
-            enqueue(node, frequencies[i]);
+            enqueue(node, frequencies[i] + 1);
         }
     }
 
@@ -223,7 +223,7 @@ static huff_node_t* build_huffman_tree_from_freq(unsigned int *frequencies, int 
         internal->left = left;
         internal->right = right;
 
-        enqueue(internal, internal->freq);
+        enqueue(internal, internal->freq );
     }
 
     huff_node_t *root = (huff_node_t*)dequeue();
