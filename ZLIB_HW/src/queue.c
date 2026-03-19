@@ -8,10 +8,19 @@
 typedef struct {
 	void* node;
 	unsigned int priority;
+	unsigned int seq;
 } item_t;
 
 static item_t heap[QUEUE_CAP];
 static size_t heap_size;
+static unsigned int next_seq;
+
+/* Returns true if a has strictly higher priority (lower value) than b,
+   breaking ties by insertion order (FIFO). */
+static int item_less(const item_t* a, const item_t* b) {
+	return a->priority < b->priority ||
+	       (a->priority == b->priority && a->seq < b->seq);
+}
 
 /**
  * Enqueues arbitrary pointer node with priority
@@ -25,12 +34,13 @@ void enqueue(void* node, unsigned int priority) {
 	// insert node at the end of the array
 	heap[i].node = node;
 	heap[i].priority = priority;
+	heap[i].seq = next_seq++;
 	while (i > 0) {
 		// start at highest priority node? and recursively examine parent
 		size_t parent = (i - 1) / 2;
 		// node's priority must be greater than parent's priority:
 		// if parent's priority is less than or equal to the node's priority, we have gone too far
-		if (heap[parent].priority <= heap[i].priority) break;
+		if (!item_less(&heap[i], &heap[parent])) break;
 		// swap parent with node to insert
 		item_t tmp = heap[parent];
 		heap[parent] = heap[i];
@@ -58,10 +68,10 @@ void* dequeue() {
 		size_t right = 2 * i + 2;
 		size_t smallest = i;
 		// move to left subtree if its priority is smaller
-		if (left < heap_size && heap[left].priority < heap[smallest].priority)
+		if (left < heap_size && item_less(&heap[left], &heap[smallest]))
 			smallest = left;
 		// move to right subtree if its priority is smaller
-		if (right < heap_size && heap[right].priority < heap[smallest].priority)
+		if (right < heap_size && item_less(&heap[right], &heap[smallest]))
 			smallest = right;
 		if (smallest == i) break;
 		// swap parent node with child that has the least priority
@@ -83,4 +93,5 @@ size_t queue_size(void) {
 
 void queue_clear(void) {
 	heap_size = 0;
+	next_seq = 0;
 }
