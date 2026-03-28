@@ -14,21 +14,38 @@ static size_t max_aggregate_payload = 0;
 static size_t current_aggregate_payload = 0;
 
 ///////// HELPERS
-static int get_free_list_index(size_t size) {
-    int index = 0;
-    size_t class_size = 32;
-    while (index < NUM_FREE_LISTS - 1 && size > class_size) { class_size *= 2; index++; }
-    return index;
+static size_t get_block_size(size_t size) {
+    size_t mod = size % 16;
+    size_t pad = mod == 0 ? 0 : 16 - mod;
+    size_t tize = size + pad + 16;
+    return tize;
 }
 
-static void remove_from_free_list(sf_block *block) {
+static void write_block(sf_block *block, size_t block_size, size_t payload_size, int in_qklst, int alloc) {
+    uint64_t head = payload_size << 32 | block_size | in_qklst << 1 | alloc;
+    block->header = head ^ MAGIC;
+    sf_footer *footer = (sf_footer *)((char *)block + block_size - 8);
+    *footer = block->header;
+}
+
+int get_from_flist(size_t size) {
+    size_t m = 32;
+    if (size <= m) return 0;
+    if (size > m << 10) return 11;
+    for (int i = 1; i < NUM_FREE_LISTS; i++) {
+        if (size <= m << i) return i;
+    }
+    return -1;
+}
+
+static void remove_from_flist(sf_block *block) {
     block->body.links.prev->body.links.next = block->body.links.next;
     block->body.links.next->body.links.prev = block->body.links.prev;
 }
 
-static void add_to_free_list(sf_block *block) {
+static void add_to_flist(sf_block *block) {
     size_t block_size = (block->header ^ MAGIC) & 0xFFFFFFF0;
-    int index = get_free_list_index(block_size);
+    int index = get_from_flist(block_size);
     sf_block *head = &sf_free_list_heads[index];
     block->body.links.next = head->body.links.next;
     block->body.links.prev = head;
@@ -36,23 +53,9 @@ static void add_to_free_list(sf_block *block) {
     head->body.links.next = block;
 }
 
-static void write_block(sf_block *block, size_t block_size, size_t payload_size, int in_qklst, int alloc) {
-    uint64_t header_val = ((uint64_t)payload_size << 32) | block_size | (in_qklst ? IN_QUICK_LIST : 0) | (alloc ? THIS_BLOCK_ALLOCATED : 0);
-    block->header = header_val ^ MAGIC;
-    sf_footer *footer = (sf_footer *)((char *)block + block_size - 8);
-    *footer = header_val ^ MAGIC;
-}
-
 static void write_epilogue() {
     sf_block *epilogue = (sf_block *)((char *)sf_mem_end() - 8);
     epilogue->header = (0 | THIS_BLOCK_ALLOCATED) ^ MAGIC;
-}
-
-static size_t get_block_size(size_t size) {
-    size_t mod = size % 16;
-    size_t pad = mod == 0 ? 0 : 16 - mod;
-    size_t block_size = size + pad + 8 + 8; /* payload + padding + header + footer */
-    return block_size;
 }
 
 static void init_heap() {
@@ -76,7 +79,7 @@ static void init_heap() {
     sf_block *first_free = (sf_block *)((char *)prologue + 32);
     size_t free_size = (char *)sf_mem_end() - 8 - (char *)first_free;
     write_block(first_free, free_size, 0, 0, 0);
-    add_to_free_list(first_free);
+    add_to_flist(first_free);
 
     heap_initialized = 1;
 }
@@ -98,13 +101,13 @@ static sf_block *grow_heap() {
     if (!prev_alloc) {
         size_t prev_size = prev_raw & 0xFFFFFFF0;
         sf_block *prev_block = (sf_block *)((char *)new_block - prev_size);
-        remove_from_free_list(prev_block);
+        remove_from_flist(prev_block);
         size_t combined = prev_size + new_size;
         write_block(prev_block, combined, 0, 0, 0);
         new_block = prev_block;
     }
 
-    add_to_free_list(new_block);
+    add_to_flist(new_block);
     return new_block;
 }
 
@@ -120,7 +123,7 @@ static void flush_quick_list(int qi) {
         uint64_t next_header = next_block->header ^ MAGIC;
         if (!(next_header & THIS_BLOCK_ALLOCATED)) {
             size_t next_size = next_header & 0xFFFFFFF0;
-            remove_from_free_list(next_block);
+            remove_from_flist(next_block);
             block_size += next_size;
             write_block(bp, block_size, 0, 0, 0);
         }
@@ -130,13 +133,13 @@ static void flush_quick_list(int qi) {
         if (!(prev_raw & THIS_BLOCK_ALLOCATED)) {
             size_t prev_size = prev_raw & 0xFFFFFFF0;
             sf_block *prev_block = (sf_block *)((char *)bp - prev_size);
-            remove_from_free_list(prev_block);
+            remove_from_flist(prev_block);
             block_size += prev_size;
             bp = prev_block;
             write_block(bp, block_size, 0, 0, 0);
         }
 
-        add_to_free_list(bp);
+        add_to_flist(bp);
         bp = next;
     }
     sf_quick_lists[qi].first = NULL;
@@ -188,7 +191,7 @@ void *sf_malloc(size_t size) {
     }
 
     sf_block *found = NULL;
-    int start_index = get_free_list_index(block_size);
+    int start_index = get_from_flist(block_size);
     for (int i = start_index; i < NUM_FREE_LISTS; i++) {
         sf_block *current = sf_free_list_heads[i].body.links.next;
         while (current != &sf_free_list_heads[i]) {
@@ -210,14 +213,14 @@ void *sf_malloc(size_t size) {
             found = new_block;
     }
 
-    remove_from_free_list(found);
+    remove_from_flist(found);
     size_t found_size = (found->header ^ MAGIC) & 0xFFFFFFF0;
     size_t remainder = found_size - block_size;
 
     if (remainder >= 32) {
         sf_block *rem_block = (sf_block *)((char *)found + block_size);
         write_block(rem_block, remainder, 0, 0, 0);
-        add_to_free_list(rem_block);
+        add_to_flist(rem_block);
         write_block(found, block_size, size, 0, 1);
     } else {
         write_block(found, found_size, size, 0, 1);
@@ -258,7 +261,7 @@ void sf_free(void *pp) {
     uint64_t next_header = next_block->header ^ MAGIC;
     if (!(next_header & THIS_BLOCK_ALLOCATED)) {
         size_t next_size = next_header & 0xFFFFFFF0;
-        remove_from_free_list(next_block);
+        remove_from_flist(next_block);
         block_size += next_size;
         write_block(block, block_size, 0, 0, 0);
     }
@@ -268,13 +271,13 @@ void sf_free(void *pp) {
     if (!(prev_raw & THIS_BLOCK_ALLOCATED)) {
         size_t prev_size = prev_raw & 0xFFFFFFF0;
         sf_block *prev_block = (sf_block *)((char *)block - prev_size);
-        remove_from_free_list(prev_block);
+        remove_from_flist(prev_block);
         block_size += prev_size;
         block = prev_block;
         write_block(block, block_size, 0, 0, 0);
     }
 
-    add_to_free_list(block);
+    add_to_flist(block);
 }
 
 void *sf_realloc(void *pp, size_t rsize) {
@@ -315,12 +318,12 @@ void *sf_realloc(void *pp, size_t rsize) {
             uint64_t next_hdr = next_blk->header ^ MAGIC;
             if (!(next_hdr & THIS_BLOCK_ALLOCATED)) {
                 size_t next_sz = next_hdr & 0xFFFFFFF0;
-                remove_from_free_list(next_blk);
+                remove_from_flist(next_blk);
                 remainder += next_sz;
                 write_block(rem, remainder, 0, 0, 0);
             }
 
-            add_to_free_list(rem);
+            add_to_flist(rem);
         } else {
             write_block(block, block_size, rsize, 0, 1);
         }
