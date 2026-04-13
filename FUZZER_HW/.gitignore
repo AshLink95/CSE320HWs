@@ -7,3 +7,4 @@ bin/
 *.txt
 compile_commands.json
 .clangd
+additional
