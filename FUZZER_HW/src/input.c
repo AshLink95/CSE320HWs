@@ -1,4 +1,4 @@
-#include "input.h"
+#include "../include/input.h"
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
@@ -10,7 +10,7 @@ struct input {
 };
 
 INPUT make_input(const char *input_str) {
-    INPUT input = malloc(sizeof *input);
+    INPUT input = malloc(sizeof(struct input));
     input->len = strlen(input_str);
     input->state = 0;
     input->str = malloc(input->len + 1);
