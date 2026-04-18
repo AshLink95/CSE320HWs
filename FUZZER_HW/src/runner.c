@@ -244,54 +244,189 @@ int runner_launch(RUNNER runner) {
 }
 
 
+struct node {
+    RUNNER runner;
+    RUNNER_STATE state;
+    int cached_data; //preserves pipes
+    struct node* next;
+    struct node* prev;
+};
+
+struct queue {
+    struct node* head;
+    struct node* tail;
+};
+
+struct runners {
+    struct queue ready;
+    struct queue active;
+    struct queue done;
+};
+
+static struct queue rq_init() {
+    struct queue qu;
+    qu.head = malloc(sizeof(struct node));
+    qu.tail = malloc(sizeof(struct node));
+
+    qu.head->runner = NULL;
+    qu.tail->runner = NULL;
+
+    qu.head->next = qu.tail;
+    qu.head->prev = NULL;
+    qu.tail->next = NULL;
+    qu.tail->prev = qu.head;
+
+    return qu;
+}
+
+static void rq_kill(struct queue qu) {
+    struct node* now = qu.head->next;
+    struct node* next;
+
+    while (now != qu.tail) {
+        next = now->next;
+        if (now->runner != NULL) runner_fini(now->runner);
+        free(now);
+        now = next;
+    }
+
+    free(qu.head);
+    free(qu.tail);
+}
+
+static int rq_empty(struct queue *qu) {
+    return qu->head->next == qu->tail;
+}
+
+static void rq_enqueue(struct queue *qu, RUNNER runner) {
+    struct node* last = qu->tail->prev;
+    struct node* new = malloc(sizeof(struct node));
+    new->runner = runner;
+    new->next = qu->tail;
+    new->prev = last;
+    qu->tail->prev = new;
+    last->next = new;
+}
+
+static RUNNER rq_dequeue(struct queue *qu) {
+    if (rq_empty(qu)) return NULL;
+    struct node* first = qu->head->next;
+    RUNNER runner = first->runner;
+
+    qu->head->next = first->next;
+    first->next->prev = qu->head;
+    free(first);
+
+    return runner;
+}
+
+static void rq_remove_node(struct node *n) {
+    n->prev->next = n->next;
+    n->next->prev = n->prev;
+    free(n);
+}
 
 RUNNERS runners_init(int job_count) {
-    (void) job_count;
-    return 0;
+    RUNNERS runners = malloc(sizeof(struct runners));
+    runners->ready = rq_init();
+    runners->active = rq_init();
+    runners->done = rq_init();
+
+    for (int i = 0; i < job_count; i++) {
+        RUNNER r = runner_init();
+        runner_launch(r);
+        rq_enqueue(&runners->ready, r);
+    }
+
+    return runners;
 }
 
 void runners_fini(RUNNERS runners) {
-    (void) runners;
+    rq_kill(runners->ready);
+    rq_kill(runners->active);
+    rq_kill(runners->done);
+    free(runners);
 }
 
 int runners_submit_input(RUNNERS runners, INPUT input) {
-    (void) runners;
-    (void) input;
+    RUNNER r = rq_dequeue(&runners->ready);
+    if (!r) return -1;
+
+    int ret = fuzzer_send_runner_input(r, input);
+    if (ret == -1) {
+        rq_enqueue(&runners->ready, r);
+        return -1;
+    }
+
+    rq_enqueue(&runners->active, r);
     return 0;
 }
 
 int runners_has_jobs(RUNNERS runners) {
-    (void) runners;
-    return 0;
+    return !rq_empty(&runners->ready) || !rq_empty(&runners->active) || !rq_empty(&runners->done);
 }
 
 int runners_has_active_jobs(RUNNERS runners) {
-    (void) runners;
-    return 0;
+    return !rq_empty(&runners->active);
 }
 
 int runners_has_done_jobs(RUNNERS runners) {
-    (void) runners;
-    return 0;
+    return !rq_empty(&runners->done);
 }
 
 int runners_has_ready_jobs(RUNNERS runners) {
-    (void) runners;
-    return 0;
+    return !rq_empty(&runners->ready);
 }
 
 void runners_check_if_jobs_done(RUNNERS runners) {
-    (void) runners;
+    struct node* cur = runners->active.head->next;
+    while (cur != runners->active.tail) {
+        struct node* next = cur->next;
+        int data = 0;
+        RUNNER_STATE state = fuzzer_attempt_receive_status(cur->runner, &data);
+        if (state != NO_STATE) {
+            RUNNER r = cur->runner;
+            RUNNER_STATE s = state;
+            int d = data;
+            rq_remove_node(cur);
+            struct node* last = runners->done.tail->prev;
+            struct node* new = malloc(sizeof(struct node));
+            new->runner = r;
+            new->state = s;
+            new->cached_data = d;
+            new->next = runners->done.tail;
+            new->prev = last;
+            runners->done.tail->prev = new;
+            last->next = new;
+        }
+        cur = next;
+    }
 }
 
 RUNNER runners_process_result(RUNNERS runners, RUNNER_STATE *state, int *data) {
-    (void) runners;
-    (void) state;
-    (void) data;
-    return 0;
+    if (rq_empty(&runners->done)) return NULL;
+
+    struct node* first = runners->done.head->next;
+    RUNNER r = first->runner;
+    if (state) *state = first->state;
+    if (data) *data = first->cached_data;
+
+    runners->done.head->next = first->next;
+    first->next->prev = runners->done.head;
+    free(first);
+
+    rq_enqueue(&runners->ready, r);
+    return r;
 }
 
 int runners_reap(RUNNERS runners) {
-    (void) runners;
+    struct queue *queues[] = { &runners->ready, &runners->active, &runners->done };
+    for (int q = 0; q < 3; q++) {
+        struct node* cur = queues[q]->head->next;
+        while (cur != queues[q]->tail) {
+            struct node* next = cur->next;
+            cur = next;
+        }
+    }
     return 0;
 }
