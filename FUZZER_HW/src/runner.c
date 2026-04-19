@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -424,6 +425,7 @@ int runners_reap(RUNNERS runners) {
     for (int q = 0; q < 3; q++) {
         struct node* cur = queues[q]->head->next;
         while (cur != queues[q]->tail) {
+            waitpid(cur->runner->child, NULL, WNOHANG);
             struct node* next = cur->next;
             cur = next;
         }
