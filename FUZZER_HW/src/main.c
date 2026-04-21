@@ -4,19 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-static size_t conv(const char *s) {
-    char *end;
-    unsigned long long val = strtoull(s, &end, 10);
-    return (size_t)val;
-}
-
 int main(int argc, char *argv[]) {
     size_t jobs = DEFAULT_RUNNER_COUNT;
     size_t inputs = DEFAULT_INPUT_TOTAL;
     size_t tlimit = DEFAULT_TIMEOUT_SEC;
     char *seed_path = NULL;
 
-    size_t i = 1;
+    int i = 1;
     for (; i < argc && argv[i][0] == '-' && argv[i][1] != '\0'; i++) {
         char flag = argv[i][1];
         if (flag == 'h') {
@@ -24,16 +18,16 @@ int main(int argc, char *argv[]) {
             return EXIT_SUCCESS;
         } else if (flag == 'j') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
-            jobs = conv(argv[i]);
+            jobs = atoi(argv[i]);
         } else if (flag == 'n') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
-            inputs = conv(argv[i]);
+            inputs = atoi(argv[i]);
         } else if (flag == 's') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
             seed_path = argv[i];
         } else if (flag == 't') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
-            tlimit = conv(argv[i]);
+            tlimit = atoi(argv[i]);
         } else {
             break;
         }
