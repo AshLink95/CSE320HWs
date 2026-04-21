@@ -1,5 +1,6 @@
 #include "../include/runner.h"
 #include "../include/global.h"
+#include "../include/fuzzer.h"
 #include <bits/types/sigset_t.h>
 #include <signal.h>
 #include <stdio.h>
@@ -72,6 +73,10 @@ char *runner_coverage_map(RUNNER runner) {
 
 INPUT runner_get_active_input(RUNNER runner) {
     return runner->input;
+}
+
+int runner_get_id(RUNNER runner) {
+    return runner->id;
 }
 
 int fuzzer_send_runner_input(RUNNER runner, INPUT input) {
@@ -163,12 +168,15 @@ int runner_launch(RUNNER runner) {
         close(runner->pipe2fuzzr[0]);
         dup2(runner->shm_obj, COVERAGE_MAP_FD);
 
+        fzl_runner_init(runner->id, NULL);
+
         while (!TERM) {
             if (runner->input == NULL) {
                 char *recv = runner_receive_fuzzer_input(runner);
                 if (!recv) break;
                 runner->input = make_input(recv);
                 free(recv);
+                fzl_runner_received_input(runner->id, input_str(runner->input), NULL);
             }
 
             pid_t target = fork();
@@ -188,6 +196,7 @@ int runner_launch(RUNNER runner) {
                 }
                 exec_args[program_argc + 1] = NULL;
 
+                fzl_runner_launch(runner->id, exec_args, NULL);
                 execvp(cmd, exec_args);
                 _exit(127);
             }
@@ -218,13 +227,16 @@ int runner_launch(RUNNER runner) {
             if (ALARM) {
                 kill(target, SIGKILL);
                 waitpid(target, &status, 0);
+                fzl_runner_sending_status(runner->id, TIMEOUT, 0, NULL);
                 runner_alert_fuzzer(runner, TIMEOUT, 0);
             } else if (CHILD) {
                 alarm(0);
                 waitpid(target, &status, 0);
                 if (WIFSIGNALED(status)) {
+                    fzl_runner_sending_status(runner->id, CRASH, WTERMSIG(status), NULL);
                     runner_alert_fuzzer(runner, CRASH, WTERMSIG(status));
                 } else {
+                    fzl_runner_sending_status(runner->id, VALID, WEXITSTATUS(status), NULL);
                     runner_alert_fuzzer(runner, VALID, WEXITSTATUS(status));
                 }
             }
@@ -234,6 +246,7 @@ int runner_launch(RUNNER runner) {
             ALARM = 0;
             CHILD = 0;
         }
+        fzl_runner_fini(runner->id, NULL);
         _exit(0);
     }
     else return -1;
@@ -353,11 +366,15 @@ int runners_submit_input(RUNNERS runners, INPUT input) {
     RUNNER r = rq_dequeue(&runners->ready);
     if (!r) return -1;
 
+    fzl_sending_input(r->id, input_str(input), NULL);
     int ret = fuzzer_send_runner_input(r, input);
     if (ret == -1) {
         rq_enqueue(&runners->ready, r);
         return -1;
     }
+
+    if (r->input) free_input(r->input);
+    r->input = make_input(input_str(input));
 
     rq_enqueue(&runners->active, r);
     return 0;

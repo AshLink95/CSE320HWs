@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+int runner_get_id(RUNNER runner);
+
 static volatile sig_atomic_t TERM = 0;
 static void handle_term(int signo) { TERM = signo; }
 
@@ -87,7 +89,7 @@ int run_fuzzer(FILE *seed_file, int job_count, int input_count, int time_limit, 
             RUNNER r = runners_process_result(runners, &state, &data);
             if (!r) break;
 
-            fzl_received_status(0, state, data, NULL);
+            fzl_received_status(runner_get_id(r), state, data, NULL);
 
             if (state == VALID)
                 coverage_map_add(map, runner_coverage_map(r));
@@ -108,7 +110,6 @@ int run_fuzzer(FILE *seed_file, int job_count, int input_count, int time_limit, 
                 mutated++;
             }
 
-            fzl_sending_input(0, input_str(to_submit), NULL);
             runners_submit_input(runners, to_submit);
             free_input(to_submit);
             dispatched++;
