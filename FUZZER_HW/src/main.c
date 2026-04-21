@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+static size_t conv(const char *s) {
+    char *end;
+    unsigned long long val = strtoull(s, &end, 10);
+    return (size_t)val;
+}
+
 int main(int argc, char *argv[]) {
     size_t jobs = DEFAULT_RUNNER_COUNT;
     size_t inputs = DEFAULT_INPUT_TOTAL;
@@ -18,16 +24,16 @@ int main(int argc, char *argv[]) {
             return EXIT_SUCCESS;
         } else if (flag == 'j') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
-            jobs = atoi(argv[i]);
+            jobs = conv(argv[i]);
         } else if (flag == 'n') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
-            inputs = atoi(argv[i]);
+            inputs = conv(argv[i]);
         } else if (flag == 's') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
             seed_path = argv[i];
         } else if (flag == 't') {
             if (++i >= argc) { PRINT_USAGE(stderr, argv[0]); return EXIT_FAILURE; }
-            tlimit = atoi(argv[i]);
+            tlimit = conv(argv[i]);
         } else {
             break;
         }
