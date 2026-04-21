@@ -9,12 +9,11 @@
 static uint64_t H(uint64_t n, uint64_t m, uint64_t x) {
     uint64_t val = x;
     for (uint64_t i = 0; i < m; i++)
-        val = hash(val % n);
+        val = hash(val) % n;
     return val;
 }
 
 static INPUT strategy_fill(const char *str, size_t N, uint64_t K) {
-    if (N == 0) return make_input("");
     size_t target;
     if (K > 10)
         target = MAX_INPUT_LEN;
