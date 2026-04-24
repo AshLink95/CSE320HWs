@@ -208,8 +208,6 @@ int runner_launch(RUNNER runner) {
             }
             if (target == -1) _exit(1);
 
-            ALARM = 0;
-            CHILD = 0;
             alarm(timeout);
 
             sigset_t wait_mask;
@@ -230,12 +228,7 @@ int runner_launch(RUNNER runner) {
             }
 
             int status;
-            if (ALARM) {
-                kill(target, SIGKILL);
-                waitpid(target, &status, 0);
-                fzl_runner_sending_status(runner->id, TIMEOUT, 0, NULL);
-                runner_alert_fuzzer(runner, TIMEOUT, 0);
-            } else if (CHILD) {
+            if (CHILD) {
                 alarm(0);
                 waitpid(target, &status, 0);
                 if (WIFSIGNALED(status)) {
@@ -245,6 +238,11 @@ int runner_launch(RUNNER runner) {
                     fzl_runner_sending_status(runner->id, VALID, WEXITSTATUS(status), NULL);
                     runner_alert_fuzzer(runner, VALID, WEXITSTATUS(status));
                 }
+            } else if (ALARM) {
+                kill(target, SIGKILL);
+                waitpid(target, &status, 0);
+                fzl_runner_sending_status(runner->id, TIMEOUT, 0, NULL);
+                runner_alert_fuzzer(runner, TIMEOUT, 0);
             }
 
             free_input(runner->input);
