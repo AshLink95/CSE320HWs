@@ -149,6 +149,12 @@ int runner_launch(RUNNER runner) {
         CHILD = 0;
         ALARM = 0;
 
+        sigset_t unblock;
+        sigemptyset(&unblock);
+        sigaddset(&unblock, SIGCHLD);
+        sigaddset(&unblock, SIGUSR1);
+        sigprocmask(SIG_UNBLOCK, &unblock, NULL);
+
         struct sigaction* sa = malloc(sizeof(struct sigaction));
         sa->sa_handler = handle_term;
         sigemptyset(&sa->sa_mask);
