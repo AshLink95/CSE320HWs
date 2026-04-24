@@ -5,9 +5,9 @@
 #include <string.h>
 
 int main(int argc, char *argv[]) {
-    int jobs = DEFAULT_RUNNER_COUNT;
-    int inputs = DEFAULT_INPUT_TOTAL;
-    int tlimit = DEFAULT_TIMEOUT_SEC;
+    size_t jobs = DEFAULT_RUNNER_COUNT;
+    size_t inputs = DEFAULT_INPUT_TOTAL;
+    size_t tlimit = DEFAULT_TIMEOUT_SEC;
     char *seed_path = NULL;
 
     int i = 1;
