@@ -121,7 +121,7 @@ int runner_alert_fuzzer(RUNNER runner, RUNNER_STATE state, int data) {
     return 0;
 }
 
-RUNNER_STATE fuzzer_attempt_receive_status(RUNNER runner, int *data) {
+RUNNER_STATE fuzzer_attempt_receive_status(RUNNER runner, int *data) { //TODO: fix this (should be able to give CRASH and TIMEOUT; also, seems very weird)
     RUNNER_STATE state;
     if (read(runner->pipe2fuzzr[0], &state, sizeof(state)) <= 0) return NO_STATE;
 
@@ -438,12 +438,41 @@ RUNNER runners_process_result(RUNNERS runners, RUNNER_STATE *state, int *data) {
 }
 
 int runners_reap(RUNNERS runners) {
-    struct queue *queues[] = { &runners->ready, &runners->active, &runners->done };
-    for (int q = 0; q < 3; q++) {
-        struct node* cur = queues[q]->head->next;
-        while (cur != queues[q]->tail) {
-            waitpid(cur->runner->child, NULL, WNOHANG);
+    while (1) {
+        int status;
+        pid_t pid = waitpid(-1, &status, WNOHANG);
+        if (pid <= 0) break;
+
+        struct node* cur = runners->active.head->next;
+        while (cur != runners->active.tail) {
             struct node* next = cur->next;
+            if (cur->runner->child == pid) {
+                RUNNER r = cur->runner;
+                r->child = 0; // no double-wait in runner_fini
+
+                RUNNER_STATE s;
+                int d;
+                if (WIFSIGNALED(status)) {
+                    s = CRASH;
+                    d = WTERMSIG(status);
+                } else {
+                    s = VALID;
+                    d = WEXITSTATUS(status);
+                }
+
+                rq_remove_node(cur);
+
+                struct node* last = runners->done.tail->prev;
+                struct node* new = malloc(sizeof(struct node));
+                new->runner = r;
+                new->state = s;
+                new->cached_data = d;
+                new->next = runners->done.tail;
+                new->prev = last;
+                runners->done.tail->prev = new;
+                last->next = new;
+                break;
+            }
             cur = next;
         }
     }
