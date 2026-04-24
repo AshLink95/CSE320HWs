@@ -17,11 +17,13 @@ static void handle_term(int signo) { TERM = signo; }
 static volatile sig_atomic_t CHLD = 0;
 static void handle_chld(int signo) { (void)signo; CHLD = 1; }
 
-static void handle_usr1(int signo) { (void)signo; }
+static volatile sig_atomic_t USR1 = 0;
+static void handle_usr1(int signo) { (void)signo; USR1 = 1; }
 
 int run_fuzzer(FILE *seed_file, int job_count, int input_count, int time_limit, char *target_program[]) {
     TERM = 0;
     CHLD = 0;
+    USR1 = 0;
 
     fzl_init(NULL);
 
@@ -81,7 +83,10 @@ int run_fuzzer(FILE *seed_file, int job_count, int input_count, int time_limit, 
     while (!TERM) {
         if (CHLD) { runners_reap(runners); CHLD = 0; }
 
-        runners_check_if_jobs_done(runners);
+        if (USR1) {
+            runners_check_if_jobs_done(runners);
+            USR1 = 0;
+        }
 
         while (runners_has_done_jobs(runners)) {
             RUNNER_STATE state;
