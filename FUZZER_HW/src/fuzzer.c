@@ -93,10 +93,11 @@ int run_fuzzer(FILE *seed_file, int job_count, int input_count, int time_limit, 
 
             if (state == VALID) {
                 COVERAGE_PRIORITY prio = coverage_map_add(map, runner_coverage_map(r));
-                if (prio == COV_HIGH_PRIO)
-                    enqueue_high_prio_input(queue, runner_get_active_input(r));
-                else if (prio == COV_LOW_PRIO)
-                    enqueue_low_prio_input(queue, runner_get_active_input(r));
+                INPUT active = runner_get_active_input(r);
+                if (active && prio == COV_HIGH_PRIO)
+                    enqueue_high_prio_input(queue, make_input(input_str(active)));
+                else if (active && prio == COV_LOW_PRIO)
+                    enqueue_low_prio_input(queue, make_input(input_str(active)));
             }
         }
 
