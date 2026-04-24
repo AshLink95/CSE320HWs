@@ -141,10 +141,14 @@ static volatile sig_atomic_t ALARM = 0;
 static void handle_alarm(int signo) { ALARM = signo; };
 
 int runner_launch(RUNNER runner) {
+    int init_pipe[2];
+    pipe(init_pipe);
+
     runner->parent = getpid();
     pid_t pid = fork();
     if (pid > 0) runner->child = pid;
     else if (!pid) {
+        close(init_pipe[0]);
         TERM = 0;
         CHILD = 0;
         ALARM = 0;
@@ -175,6 +179,10 @@ int runner_launch(RUNNER runner) {
         dup2(runner->shm_obj, COVERAGE_MAP_FD);
 
         fzl_runner_init(runner->id, NULL);
+
+        char ready = 1;
+        write(init_pipe[1], &ready, 1);
+        close(init_pipe[1]);
 
         while (!TERM) {
             if (runner->input == NULL) {
@@ -253,7 +261,16 @@ int runner_launch(RUNNER runner) {
         fzl_runner_fini(runner->id, NULL);
         _exit(0);
     }
-    else return -1;
+    else {
+        close(init_pipe[0]);
+        close(init_pipe[1]);
+        return -1;
+    }
+
+    close(init_pipe[1]);
+    char ready;
+    read(init_pipe[0], &ready, 1);
+    close(init_pipe[0]);
 
     close(runner->pipe2runnr[0]);
     close(runner->pipe2fuzzr[1]);
