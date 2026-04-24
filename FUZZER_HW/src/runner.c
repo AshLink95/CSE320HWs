@@ -121,13 +121,13 @@ int runner_alert_fuzzer(RUNNER runner, RUNNER_STATE state, int data) {
     return 0;
 }
 
-RUNNER_STATE fuzzer_attempt_receive_status(RUNNER runner, int *data) { //TODO: fix this (should be able to give CRASH and TIMEOUT; also, seems very weird)
+RUNNER_STATE fuzzer_attempt_receive_status(RUNNER runner, int *data) {
     RUNNER_STATE state;
     if (read(runner->pipe2fuzzr[0], &state, sizeof(state)) <= 0) return NO_STATE;
 
     int tada;
     if (read(runner->pipe2fuzzr[0], &tada, sizeof(tada)) <= 0) return NO_STATE;
-    if (data && state != TIMEOUT) *data = tada;
+    if (data) *data = tada;
     return state;
 }
 

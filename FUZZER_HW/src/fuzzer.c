@@ -92,11 +92,12 @@ int run_fuzzer(FILE *seed_file, int job_count, int input_count, int time_limit, 
             fzl_received_status(runner_get_id(r), state, data, NULL);
 
             if (state == VALID) {
-                COVERAGE_PRIORITY prio = coverage_map_add(map, runner_coverage_map(r));
-                if (prio == COV_HIGH_PRIO)
-                    enqueue_high_prio_input(queue, runner_get_active_input(r));
-                else if (prio == COV_LOW_PRIO)
-                    enqueue_low_prio_input(queue, runner_get_active_input(r));
+                coverage_map_add(map, runner_coverage_map(r));
+                // COVERAGE_PRIORITY prio = coverage_map_add(map, runner_coverage_map(r));
+                // if (prio == COV_HIGH_PRIO)
+                //     enqueue_high_prio_input(queue, runner_get_active_input(r));
+                // else if (prio == COV_LOW_PRIO)
+                //     enqueue_low_prio_input(queue, runner_get_active_input(r));
             }
         }
 
