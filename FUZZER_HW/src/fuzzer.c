@@ -83,10 +83,7 @@ int run_fuzzer(FILE *seed_file, int job_count, int input_count, int time_limit, 
     while (!TERM) {
         if (CHLD) { runners_reap(runners); CHLD = 0; }
 
-        if (USR1) {
-            runners_check_if_jobs_done(runners);
-            USR1 = 0;
-        }
+        runners_check_if_jobs_done(runners);
 
         while (runners_has_done_jobs(runners)) {
             RUNNER_STATE state;

@@ -56,10 +56,10 @@ void runner_fini(RUNNER runner) {
         waitpid(runner->child, NULL, 0);  // reap to prevent zombie
     }
 
-    close(runner->pipe2runnr[0]);
-    close(runner->pipe2runnr[1]);
-    close(runner->pipe2fuzzr[0]);
-    close(runner->pipe2fuzzr[1]);
+    if (runner->pipe2runnr[0] >= 0) close(runner->pipe2runnr[0]);
+    if (runner->pipe2runnr[1] >= 0) close(runner->pipe2runnr[1]);
+    if (runner->pipe2fuzzr[0] >= 0) close(runner->pipe2fuzzr[0]);
+    if (runner->pipe2fuzzr[1] >= 0) close(runner->pipe2fuzzr[1]);
 
     shm_unlink(runner->name);
     close(runner->shm_obj);
@@ -114,21 +114,18 @@ char * runner_receive_fuzzer_input(RUNNER runner) {
 }
 
 int runner_alert_fuzzer(RUNNER runner, RUNNER_STATE state, int data) {
-    if (write(runner->pipe2fuzzr[1], &state, sizeof(state)) == -1) return -1;
-    if (write(runner->pipe2fuzzr[1], &data, sizeof(data)) == -1) return -1;
-
+    struct { RUNNER_STATE s; int d; } packet = { state, data };
+    if (write(runner->pipe2fuzzr[1], &packet, sizeof(packet)) != (ssize_t)sizeof(packet)) return -1;
     kill(runner->parent, SIGUSR1);
     return 0;
 }
 
 RUNNER_STATE fuzzer_attempt_receive_status(RUNNER runner, int *data) {
-    RUNNER_STATE state;
-    if (read(runner->pipe2fuzzr[0], &state, sizeof(state)) <= 0) return NO_STATE;
-
-    int tada;
-    if (read(runner->pipe2fuzzr[0], &tada, sizeof(tada)) <= 0) return NO_STATE;
-    if (data) *data = tada;
-    return state;
+    struct { RUNNER_STATE s; int d; } packet;
+    ssize_t n = read(runner->pipe2fuzzr[0], &packet, sizeof(packet));
+    if (n != (ssize_t)sizeof(packet)) return NO_STATE;
+    if (data) *data = packet.d;
+    return packet.s;
 }
 
 static volatile sig_atomic_t TERM = 0;
@@ -273,7 +270,9 @@ int runner_launch(RUNNER runner) {
     close(init_pipe[0]);
 
     close(runner->pipe2runnr[0]);
+    runner->pipe2runnr[0] = -1;
     close(runner->pipe2fuzzr[1]);
+    runner->pipe2fuzzr[1] = -1;
 
     return 0;
 }
@@ -362,6 +361,7 @@ static void rq_remove_node(struct node *n) {
 }
 
 RUNNERS runners_init(int job_count) {
+    SIZE_ID = 0;
     RUNNERS runners = malloc(sizeof(struct runners));
     runners->ready = rq_init();
     runners->active = rq_init();
@@ -390,7 +390,7 @@ int runners_submit_input(RUNNERS runners, INPUT input) {
     fzl_sending_input(r->id, input_str(input), NULL);
     int ret = fuzzer_send_runner_input(r, input);
     if (ret == -1) {
-        rq_enqueue(&runners->ready, r);
+        runner_fini(r);
         return -1;
     }
 
@@ -464,37 +464,21 @@ int runners_reap(RUNNERS runners) {
         pid_t pid = waitpid(-1, &status, WNOHANG);
         if (pid <= 0) break;
 
-        struct node* cur = runners->active.head->next;
-        while (cur != runners->active.tail) {
-            struct node* next = cur->next;
-            if (cur->runner->child == pid) {
-                RUNNER r = cur->runner;
-                r->child = 0; // no double-wait in runner_fini
-
-                RUNNER_STATE s;
-                int d;
-                if (WIFSIGNALED(status)) {
-                    s = CRASH;
-                    d = WTERMSIG(status);
-                } else {
-                    s = VALID;
-                    d = WEXITSTATUS(status);
+        struct queue *queues[] = { &runners->ready, &runners->active, &runners->done };
+        int found = 0;
+        for (int q = 0; q < 3 && !found; q++) {
+            struct node* cur = queues[q]->head->next;
+            while (cur != queues[q]->tail) {
+                struct node* next = cur->next;
+                if (cur->runner && cur->runner->child == pid) {
+                    cur->runner->child = 0;
+                    runner_fini(cur->runner);
+                    rq_remove_node(cur);
+                    found = 1;
+                    break;
                 }
-
-                rq_remove_node(cur);
-
-                struct node* last = runners->done.tail->prev;
-                struct node* new = malloc(sizeof(struct node));
-                new->runner = r;
-                new->state = s;
-                new->cached_data = d;
-                new->next = runners->done.tail;
-                new->prev = last;
-                runners->done.tail->prev = new;
-                last->next = new;
-                break;
+                cur = next;
             }
-            cur = next;
         }
     }
     return 0;
