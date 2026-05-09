@@ -1,6 +1,6 @@
-#include "snake.h"
-#include "game_board.h"
-#include "server.h"
+#include "../include/snake.h"
+#include "../include/game_board.h"
+#include "../include/server.h"
 
 int snake_set_direction(snake_t *snake, direction_t dir) {
 	(void)snake;
