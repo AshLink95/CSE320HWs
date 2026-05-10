@@ -4,11 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "global.h"
-#include "server.h"
+#include "../include/global.h"
+#include "../include/server.h"
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     if (argc == 1) {ERR_PORT_REQUIRED(); return EXIT_FAILURE;}
 
     uint8_t pflag = 0;

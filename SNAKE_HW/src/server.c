@@ -182,7 +182,11 @@ void *server_client_handler(void *arg) {
 
 int server_start(server_t *server) {
     if (server == NULL) return -1;
-    signal(SIGINT, on_sigint);
+    struct sigaction sa = {0};
+    sa.sa_handler = on_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
 
     thread = malloc(sizeof(pthread_t));
     if (thread == NULL) return -1;
