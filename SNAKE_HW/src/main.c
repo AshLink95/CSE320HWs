@@ -74,18 +74,28 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (bval < BOARD_SIZE_MIN || bval > BOARD_SIZE_MAX)
-    {ERR_INVALID_BOARD_SIZE((int)bval); free(pstr); return EXIT_FAILURE;}
-    if (mval < MAX_PLAYERS_MIN || mval > MAX_PLAYERS_MAX)
-    {ERR_INVALID_MAX_PLAYERS((int)mval); free(pstr); return EXIT_FAILURE;}
-
+    if (bval < BOARD_SIZE_MIN || bval > BOARD_SIZE_MAX) {
+        ERR_INVALID_BOARD_SIZE((int)bval);
+        free(pstr);
+        return EXIT_FAILURE;
+    }
+    if (mval < MAX_PLAYERS_MIN || mval > MAX_PLAYERS_MAX) {
+        ERR_INVALID_MAX_PLAYERS((int)mval);
+        free(pstr);
+        return EXIT_FAILURE;
+    }
     free(pstr); pstr = NULL;
 
     server_t srv;
-    if (server_init(&srv, (int)port, (int)bval, (int)mval, sval) < 0)
-    {ERR_BIND_FAILED((int)port); return EXIT_FAILURE;}
+    if (server_init(&srv, (int)port, (int)bval, (int)mval, sval) < 0) {
+        ERR_BIND_FAILED((int)port);
+        return EXIT_FAILURE;
+    }
     PRINT_SERVER_STARTED((int)port, (int)bval, (int)mval);
-    if (server_start(&srv) < 0) {server_cleanup(&srv); return EXIT_FAILURE;}
+    if (server_start(&srv) < 0) {
+        server_cleanup(&srv);
+        return EXIT_FAILURE;
+    }
     server_cleanup(&srv);
     return EXIT_SUCCESS;
 }
