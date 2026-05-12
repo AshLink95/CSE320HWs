@@ -166,8 +166,12 @@ void *server_client_handler(void *arg) {
         if (type == MSG_LEAVE) break;
         if (type == MSG_DIRECTION) {
             pthread_mutex_lock(&server->board_mutex);
-            snake_set_direction(&server->board.snakes[snake_id], (direction_t)payload);
+            int dir = snake_set_direction(&server->board.snakes[snake_id], (direction_t)payload);
             pthread_mutex_unlock(&server->board_mutex);
+            if (dir<0) {
+                protocol_serialize_error(err, 2, ERR_INVALID_MSG);
+                send_all(cfd, err, 2);
+            }
         }
     }
 
