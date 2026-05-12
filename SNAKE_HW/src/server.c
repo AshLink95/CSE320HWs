@@ -121,8 +121,10 @@ void *server_client_handler(void *arg) {
     }
 
     int snake_id = -1;
+    uint8_t wbuf[4];
     pthread_mutex_lock(&server->board_mutex);
     int rc = board_add_snake(&server->board, &snake_id);
+    int wlen = protocol_serialize_welcome(wbuf, 4, snake_id, server->board.size, server->board.max_snakes);
     pthread_mutex_unlock(&server->board_mutex);
     if (rc < 0) {
         protocol_serialize_error(err, 2, ERR_GAME_FULL);
@@ -130,8 +132,6 @@ void *server_client_handler(void *arg) {
         close(cfd); return NULL;
     }
 
-    uint8_t wbuf[4];
-    int wlen = protocol_serialize_welcome(wbuf, 4, snake_id, server->board.size, server->board.max_snakes);
     if (wlen < 0 || send_all(cfd, wbuf, (size_t)wlen) < 0) {
         pthread_mutex_lock(&server->board_mutex);
         board_remove_snake(&server->board, snake_id);
@@ -229,6 +229,7 @@ int server_start(server_t *server) {
 }
 
 void server_cleanup(server_t *server) { 
+    pthread_mutex_lock(&server->board_mutex);
     if (server == NULL) return;
     server->running = 0;
     for (int i=0; i<MAX_PLAYERS; i++) {
@@ -242,6 +243,7 @@ void server_cleanup(server_t *server) {
         thread = NULL;
     }
     board_free(&server->board);
+    pthread_mutex_unlock(&server->board_mutex);
     pthread_mutex_destroy(&server->board_mutex);
 }
 
