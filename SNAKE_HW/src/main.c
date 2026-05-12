@@ -69,7 +69,8 @@ int main(int argc, char **argv) {
                 char matta[3];
                 matta[0] = '-'; matta[1] = arg[j]; matta[2] = '\0';
                 ERR_MSG("Unknown option %s", matta);
-                free(pstr); return EXIT_FAILURE;
+                free(pstr);
+                return EXIT_FAILURE;
             }
         }
     }
