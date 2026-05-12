@@ -17,11 +17,12 @@ int board_init(game_board_t *board, int size, int max_snakes, unsigned int seed)
     board->rng_state = seed;
 
     for (int i = 0; i < size; i++) {
-        for (int j = 1; j < size-1; j++) board->cells[i*size + j] = CELL_EMPTY;
-        board->cells[i] = CELL_WALL;
-        board->cells[(size-1) * size + i] = CELL_WALL;
-        board->cells[i * size] = CELL_WALL;
-        board->cells[i * size + size-1] = CELL_WALL;
+        for (int j = 0; j < size; j++) {
+            if (i == 0 || i == size-1 || j == 0 || j == size-1)
+                board->cells[i*size + j] = CELL_WALL;
+            else
+                board->cells[i*size + j] = CELL_EMPTY;
+        }
     }
 
     memset(board->snakes, 0, sizeof(board->snakes));
@@ -119,7 +120,12 @@ int board_add_snake(game_board_t *board, int *out_id) {
 }
 
 int board_remove_snake(game_board_t *board, int snake_id) {
-    if (board->max_snakes <= snake_id) return -1;
+    int count = 0;
+    for (int i=0; i<board->max_snakes; i++) {
+        if (board->snakes[i].id == snake_id) break;
+        count++;
+    }
+    if (count==board->max_snakes) return -1;
     snake_t* snake = &board->snakes[snake_id];
     if (snake == NULL) return -1;
     int len = snake->length;
