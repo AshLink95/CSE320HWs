@@ -256,13 +256,13 @@ def run_game(client):
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP or event.key == pygame.K_w:
+                if event.key == pygame.K_UP or event.key == pygame.K_w or event.key == pygame.K_k:
                     client.send_direction(DIR_UP)
-                elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                elif event.key == pygame.K_DOWN or event.key == pygame.K_s or event.key == pygame.K_j:
                     client.send_direction(DIR_DOWN)
-                elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                elif event.key == pygame.K_LEFT or event.key == pygame.K_a or event.key == pygame.K_h:
                     client.send_direction(DIR_LEFT)
-                elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                elif event.key == pygame.K_RIGHT or event.key == pygame.K_d or event.key == pygame.K_l:
                     client.send_direction(DIR_RIGHT)
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
                     running = False
@@ -366,7 +366,7 @@ def main():
     print(f"Connected! Player ID: {client.player_id}, "
           f"Board: {client.board_size}x{client.board_size}, "
           f"Max players: {client.max_players}")
-    print("Controls: Arrow keys or WASD to move, Q/Esc to quit")
+    print("Controls: Arrow keys, WASD or HJKL to move, Q/Esc to quit")
 
     run_game(client)
     print("Disconnected.")
