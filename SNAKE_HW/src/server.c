@@ -13,6 +13,10 @@
 static pthread_t* thread = NULL;
 static volatile sig_atomic_t TERM = 0;
 
+static pthread_mutex_t htids_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t* htids = NULL;
+static size_t htids_n = 0, htids_cap = 0;
+
 static void on_sigint(int signo) { TERM = signo; }
 
 int server_init(server_t *server, int port, int board_size, int max_snakes, unsigned int seed) {
@@ -223,27 +227,45 @@ int server_start(server_t *server) {
         if (pthread_create(&tid, NULL, server_client_handler, arg)) {
             close(cfd); free(arg); continue;
         }
-        pthread_detach(tid);
+        pthread_mutex_lock(&htids_mtx);
+        if (htids_n == htids_cap) {
+            size_t nc = htids_cap ? htids_cap * 2 : 8;
+            pthread_t* na = realloc(htids, nc * sizeof(pthread_t));
+            if (na) { htids = na; htids_cap = nc; }
+        }
+        if (htids_n < htids_cap) htids[htids_n++] = tid;
+        else pthread_detach(tid);
+        pthread_mutex_unlock(&htids_mtx);
     }
 	return 0;
 }
 
-void server_cleanup(server_t *server) { 
-    pthread_mutex_lock(&server->board_mutex);
+void server_cleanup(server_t *server) {
     if (server == NULL) return;
+    pthread_mutex_lock(&server->board_mutex);
     server->running = 0;
     for (int i=0; i<MAX_PLAYERS; i++) {
         if (server->client_fds[i] < 0) continue;
-        close(server->client_fds[i]);
+        shutdown(server->client_fds[i], SHUT_RDWR);
     }
+    pthread_mutex_unlock(&server->board_mutex);
+    shutdown(server->listen_fd, SHUT_RDWR);
     close(server->listen_fd);
+
     if (thread != NULL) {
         pthread_join(*thread, NULL);
         free(thread);
         thread = NULL;
     }
+
+    pthread_mutex_lock(&htids_mtx);
+    pthread_t* arr = htids; size_t n = htids_n;
+    htids = NULL; htids_n = 0; htids_cap = 0;
+    pthread_mutex_unlock(&htids_mtx);
+    for (size_t i = 0; i < n; i++) pthread_join(arr[i], NULL);
+    free(arr);
+
     board_free(&server->board);
-    pthread_mutex_unlock(&server->board_mutex);
     pthread_mutex_destroy(&server->board_mutex);
 }
 
