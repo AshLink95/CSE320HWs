@@ -92,17 +92,18 @@ void *server_game_loop(void *arg) {
             }
         }
         int size = protocol_serialize_game_state(buf_s, GAME_STATE_BUF_SIZE, board);
+        if (size >= 0) {
+            for (int i=0; i<dead; i++) {
+                protocol_serialize_dead(buf_d, 2, dead_ids[i]);
+                if (fds[dead_is[i]] < 0) continue;
+                send_all(fds[dead_is[i]], buf_d, 2);
+            }
+            for (int i=0; i<MAX_PLAYERS; i++) {
+                if (fds[i] < 0) continue;
+                send_all(fds[i], buf_s, size);
+            }
+        }
         pthread_mutex_unlock(&server->board_mutex);
-        if (size<0) continue;
-        for (int i=0; i<dead; i++) {
-            protocol_serialize_dead(buf_d, 2, dead_ids[i]);
-            if (fds[dead_is[i]] < 0) continue;
-            send_all(fds[dead_is[i]], buf_d, 2);
-        }
-        for (int i=0; i<MAX_PLAYERS; i++) {
-            if (fds[i] < 0) continue;
-            send_all(fds[i], buf_s, size);
-        }
     }
 }
 
