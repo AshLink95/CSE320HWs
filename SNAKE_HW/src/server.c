@@ -196,13 +196,16 @@ int server_start(server_t *server) {
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
 
+    pthread_mutex_lock(&htids_mtx);
     thread = malloc(sizeof(pthread_t));
-    if (thread == NULL) return -1;
+    if (thread == NULL) { pthread_mutex_unlock(&htids_mtx); return -1; }
     if (pthread_create(thread, NULL, server_game_loop, (void*)server)) {
         free(thread);
         thread = NULL;
+        pthread_mutex_unlock(&htids_mtx);
         return -1;
     }
+    pthread_mutex_unlock(&htids_mtx);
 
     for (;;) {
         pthread_mutex_lock(&server->board_mutex);
@@ -252,16 +255,13 @@ void server_cleanup(server_t *server) {
     shutdown(server->listen_fd, SHUT_RDWR);
     close(server->listen_fd);
 
-    if (thread != NULL) {
-        pthread_join(*thread, NULL);
-        free(thread);
-        thread = NULL;
-    }
-
     pthread_mutex_lock(&htids_mtx);
+    pthread_t* gt = thread; thread = NULL;
     pthread_t* arr = htids; size_t n = htids_n;
     htids = NULL; htids_n = 0; htids_cap = 0;
     pthread_mutex_unlock(&htids_mtx);
+
+    if (gt != NULL) { pthread_join(*gt, NULL); free(gt); }
     for (size_t i = 0; i < n; i++) pthread_join(arr[i], NULL);
 
     free(arr);
