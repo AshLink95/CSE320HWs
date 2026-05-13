@@ -263,8 +263,8 @@ void server_cleanup(server_t *server) {
     htids = NULL; htids_n = 0; htids_cap = 0;
     pthread_mutex_unlock(&htids_mtx);
     for (size_t i = 0; i < n; i++) pthread_join(arr[i], NULL);
-    free(arr);
 
+    free(arr);
     board_free(&server->board);
     pthread_mutex_destroy(&server->board_mutex);
 }
