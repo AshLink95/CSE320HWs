@@ -1,0 +1,6 @@
+.DS_Store
+bin/
+build/
+*.gz
+notes.md
+tests-hid
