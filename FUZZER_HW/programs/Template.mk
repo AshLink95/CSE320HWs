@@ -12,14 +12,14 @@
 
 include ../Makefile.variables
 
-DIR_NM := $(notdir $(CURDIR))
+DIR_NM := $(shell basename "$(CURDIR)")
 
 EXEC-NM ?= $(DIR_NM)
 BIN ?= bin/
 BLD ?= build/
 INC ?= include/
 SRC ?= src/
-COVSAN_SRC ?= $(CURDIR)/../coverage.c
+COVSAN_SRC ?= ../coverage.c
 
 define remove_slashes
   $(shell echo $(subst /,.,$1) | sed 's/\./\//')

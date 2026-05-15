@@ -17,32 +17,31 @@ PROGRAM-DIR := cascade hello-world
 
 MAKEFLAGS += --no-print-directory
 
-MK_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-DIR_NM := $(shell basename $(MK_DIR))
-BIN ?= $(MK_DIR)/bin/
+DIR_NM := $(shell basename "$(CURDIR)")
+BIN ?= bin/
 
 .PHONY: all debug clean
 
 all: $(BIN)
 	@echo " DESCEND  $(DIR_NM)"
 	@for DIR in $(PROGRAM-DIR); do 						\
-		$(MAKE) -C $(MK_DIR)$$DIR all BIN=$(BIN);		\
+		$(MAKE) -C "$$DIR" all BIN=../bin/;				\
 	done
 	@echo " ASCEND   $(DIR_NM)"
 
 debug: $(BIN)
 	@echo " DESCEND  $(DIR_NM)"
 	@for DIR in $(PROGRAM-DIR); do 						\
-		$(MAKE) -C $(MK_DIR)$$DIR debug BIN=$(BIN);		\
+		$(MAKE) -C "$$DIR" debug BIN=../bin/;			\
 	done
 	@echo " ASCEND   $(DIR_NM)"
 
 clean:
 	@for DIR in $(PROGRAM-DIR); do						\
-		$(MAKE) -C $(MK_DIR)$$DIR clean BIN=$(BIN);		\
+		$(MAKE) -C "$$DIR" clean BIN=../bin/;			\
 	done
 	@rm -rf $(BIN)
 	@echo " CLEAN    $(DIR_NM)"
 
 $(BIN):
-	@mkdir $(BIN)
+	@mkdir -p $(BIN)

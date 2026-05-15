@@ -65,7 +65,7 @@ void *server_game_loop(void *arg) {
     int dead_ids[MAX_PLAYERS];
     int dead_is[MAX_PLAYERS];
     for(;;) {
-        usleep(TICK_INTERVAL_MS * 1000);
+        usleep(TICK_INTERVAL_MS * 100);
         pthread_mutex_lock(&server->board_mutex);
         if (!server->running) {
             pthread_mutex_unlock(&server->board_mutex);
